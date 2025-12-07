@@ -7,6 +7,7 @@ export const APP_PATHS = {
   PRODUCTS: '/dashboard/products',
   WAREHOUSES: '/dashboard/warehouses',
   STOCK_MANAGEMENT: '/dashboard/stock',
+  STOCK_MOVEMENT_LOGS: '/dashboard/stock/movement-logs',
   STOCK_IN: '/dashboard/stock/in',
   STOCK_IN_HISTORY: '/dashboard/stock/in/history',
   STOCK_OUT: '/dashboard/stock/out',
@@ -96,35 +97,35 @@ export const MENU_ITEMS: MenuItem[] = [
         icon: 'ArrowUpCircle',
       },
       {
-        title: 'Stock Transfer',
-        url: APP_PATHS.STOCK_TRANSFER,
-        icon: 'ArrowLeftRight',
-      },
-      {
         title: 'Damage/Breakage',
         url: APP_PATHS.STOCK_DAMAGE,
         icon: 'AlertTriangle',
       },
-      {
-        title: 'Adjustment',
-        url: APP_PATHS.STOCK_ADJUSTMENT,
-        icon: 'Edit',
-      },
-      {
-        title: 'Customer Return',
-        url: APP_PATHS.STOCK_RETURN,
-        icon: 'RotateCcw',
-      },
-      {
-        title: 'Supplier Return',
-        url: APP_PATHS.STOCK_SUPPLIER_RETURN,
-        icon: 'Truck',
-      },
-      {
-        title: 'Exchange',
-        url: APP_PATHS.STOCK_EXCHANGE,
-        icon: 'RefreshCw',
-      },
+      // {
+      //   title: 'Stock Transfer',
+      //   url: APP_PATHS.STOCK_TRANSFER,
+      //   icon: 'ArrowLeftRight',
+      // },
+      // {
+      //   title: 'Adjustment',
+      //   url: APP_PATHS.STOCK_ADJUSTMENT,
+      //   icon: 'Edit',
+      // },
+      // {
+      //   title: 'Customer Return',
+      //   url: APP_PATHS.STOCK_RETURN,
+      //   icon: 'RotateCcw',
+      // },
+      // {
+      //   title: 'Supplier Return',
+      //   url: APP_PATHS.STOCK_SUPPLIER_RETURN,
+      //   icon: 'Truck',
+      // },
+      // {
+      //   title: 'Exchange',
+      //   url: APP_PATHS.STOCK_EXCHANGE,
+      //   icon: 'RefreshCw',
+      // },
     ],
   },
   {
@@ -195,6 +196,7 @@ export const API_ENDPOINTS = {
     OVERVIEW: '/api/stock/overview',
     WAREHOUSE_DISTRIBUTION: '/api/stock/warehouse-distribution',
     OPERATIONS: '/api/stock/operations',
+    MOVEMENT_LOG: '/api/stock/movement-log',
   },
   QUOTATIONS: {
     BASE: '/api/quotations',

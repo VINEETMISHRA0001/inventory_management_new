@@ -4,7 +4,6 @@ import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import StoreProvider from '@/store/StoreProvider';
 import { WarehouseProvider } from '@/contexts/warehouse-context';
-import { GlobalLoader } from '@/components/global-loader';
 import { Toaster } from '@/components/ui/sonner';
 import { APP_CONFIG } from '@/lib/constants';
 
@@ -40,7 +39,6 @@ export default function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
-              <GlobalLoader />
               {children}
               <Toaster />
             </ThemeProvider>

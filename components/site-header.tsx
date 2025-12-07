@@ -9,6 +9,7 @@ import { APP_CONFIG } from '@/lib/constants';
 import type { RootState } from '@/store/store';
 import { MapPin, Circle } from 'lucide-react';
 import { Notifications } from '@/components/notifications/notifications';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
  * SiteHeader component renders the top header bar with sidebar trigger,
@@ -121,6 +122,8 @@ export function SiteHeader() {
           </div>
           {user && (
             <>
+              <Separator orientation="vertical" className="h-4" />
+              <ThemeToggle />
               <Separator orientation="vertical" className="h-4" />
               <Notifications />
               <Separator orientation="vertical" className="h-4" />

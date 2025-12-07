@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { GalleryVerticalEnd } from 'lucide-react';
@@ -17,15 +17,22 @@ import type { RootState } from '@/store/store';
  */
 export default function LoginPage() {
   const router = useRouter();
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, isLoading } = useSelector((state: RootState) => state.auth);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Only redirect if mounted and authenticated (not loading)
+    if (isMounted && isAuthenticated && !isLoading) {
       router.push(APP_PATHS.DASHBOARD);
     }
-  }, [isAuthenticated, router]);
+  }, [isMounted, isAuthenticated, isLoading, router]);
 
-  if (isAuthenticated) {
+  // Show nothing while checking auth state
+  if (!isMounted || (isAuthenticated && !isLoading)) {
     return null;
   }
 

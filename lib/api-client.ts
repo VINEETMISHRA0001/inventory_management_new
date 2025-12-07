@@ -26,35 +26,40 @@ class ApiClient {
   private setupInterceptors() {
     this.client.interceptors.request.use(
       (config) => {
-        // Only show global loader for mutations, not GET requests (searches/filters)
-        const isMutation = ['post', 'put', 'patch', 'delete'].includes(
-          config.method?.toLowerCase() || ''
-        );
-        if (isMutation) {
-          this.setLoading(true);
-        }
+        // Global loader disabled - never show overlay
+        // const isMutation = ['post', 'put', 'patch', 'delete'].includes(
+        //   config.method?.toLowerCase() || ''
+        // );
+        // if (isMutation) {
+        //   this.setLoading(true);
+        // }
         return config;
       },
       (error) => {
-        this.setLoading(false);
+        // this.setLoading(false);
         return Promise.reject(error);
       }
     );
 
     this.client.interceptors.response.use(
       (response) => {
-        this.setLoading(false);
+        // this.setLoading(false);
         return response;
       },
       async (error: AxiosError) => {
-        this.setLoading(false);
+        // this.setLoading(false);
 
         if (error.response) {
           const status = error.response.status;
 
           if (status === 401) {
             if (typeof window !== 'undefined') {
-              window.location.href = '/login';
+              // Don't redirect if already on login page to prevent loops
+              const currentPath = window.location.pathname;
+              if (currentPath !== '/login' && !currentPath.startsWith('/login')) {
+                // Only redirect if not already on a public page
+                window.location.href = '/login';
+              }
             }
           }
 
@@ -63,7 +68,9 @@ class ApiClient {
             error.message ||
             'An error occurred';
 
-          return Promise.reject(new Error(errorMessage));
+          // For 401 errors, use a more specific error message
+          const finalErrorMessage = status === 401 ? 'Unauthorized' : errorMessage;
+          return Promise.reject(new Error(finalErrorMessage));
         }
 
         if (error.request) {

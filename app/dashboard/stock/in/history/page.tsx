@@ -2,23 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppSidebar } from '@/components/app-sidebar';
-import { SiteHeader } from '@/components/site-header';
-import {
-  SidebarInset,
-  SidebarProvider,
-} from '@/components/ui/sidebar';
+import { DashboardLayout } from '@/components/dashboard-layout/dashboard-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { SIDEBAR_CONFIG, APP_PATHS, API_ENDPOINTS } from '@/lib/constants';
+import { APP_PATHS, API_ENDPOINTS } from '@/lib/constants';
 import { apiClient } from '@/lib/api-client';
-import { fetchUser } from '@/store/slices/authSlice';
 import { ArrowDownCircle, ArrowLeft, Search, Eye } from 'lucide-react';
-import type { AppDispatch, RootState } from '@/store/store';
 import {
   Dialog,
   DialogContent,
@@ -48,10 +40,6 @@ interface StockOperation {
  */
 export default function StockInHistoryPage() {
   const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
-  const { isAuthenticated, isLoading } = useSelector((state: RootState) => state.auth);
-  const [isMounted, setIsMounted] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [operations, setOperations] = useState<StockOperation[]>([]);
   const [isLoadingOperations, setIsLoadingOperations] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -65,30 +53,8 @@ export default function StockInHistoryPage() {
   });
 
   useEffect(() => {
-    setIsMounted(true);
-    fetchOperations().finally(() => {
-      setIsInitialLoad(false);
-    });
+    fetchOperations();
   }, [pagination.page]);
-
-  useEffect(() => {
-    if (!isMounted) return;
-
-    if (isAuthenticated) {
-      dispatch(fetchUser()).catch(() => {
-        router.push(APP_PATHS.LOGIN);
-      });
-    } else {
-      const checkAuth = async () => {
-        try {
-          await dispatch(fetchUser()).unwrap();
-        } catch {
-          router.push(APP_PATHS.LOGIN);
-        }
-      };
-      checkAuth();
-    }
-  }, [dispatch, router, isAuthenticated, isMounted]);
 
   const fetchOperations = async () => {
     setIsLoadingOperations(true);
@@ -109,14 +75,8 @@ export default function StockInHistoryPage() {
     }
   };
 
-  // Only show full-page loader on initial mount/auth check, not during searches
-  if (!isMounted || (isInitialLoad && (isLoading || !isAuthenticated))) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  // Use DashboardLayout for consistent auth handling
+  // No full-page loader needed - skeleton handles loading states
 
   const filteredOperations = operations.filter((op) => {
     if (!searchTerm) return true;
@@ -148,21 +108,9 @@ export default function StockInHistoryPage() {
   };
 
   return (
-    <SidebarProvider
-      style={
-        {
-          '--sidebar-width': SIDEBAR_CONFIG.WIDTH,
-          '--header-height': SIDEBAR_CONFIG.HEADER_HEIGHT,
-        } as React.CSSProperties
-      }
-    >
-      <AppSidebar variant="inset" />
-      <SidebarInset>
-        <SiteHeader />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-              <div className="flex items-center justify-between">
+    <DashboardLayout>
+      <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -351,10 +299,7 @@ export default function StockInHistoryPage() {
                   )}
                 </CardContent>
               </Card>
-            </div>
-          </div>
-        </div>
-      </SidebarInset>
+      </div>
 
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -447,7 +392,7 @@ export default function StockInHistoryPage() {
           )}
         </DialogContent>
       </Dialog>
-    </SidebarProvider>
+    </DashboardLayout>
   );
 }
 

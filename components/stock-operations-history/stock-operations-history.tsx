@@ -199,7 +199,9 @@ export function StockOperationsHistory({
               {operation.items.length > 2 && '...'}
             </div>
           </TableCell>
-          <TableCell className="font-medium">{totalQuantity.toLocaleString()}</TableCell>
+          <TableCell className="font-medium text-green-600">
+            +{totalQuantity.toLocaleString()}
+          </TableCell>
           <TableCell>
             <Badge
               variant={
@@ -268,7 +270,9 @@ export function StockOperationsHistory({
               {operation.items.length > 2 && '...'}
             </div>
           </TableCell>
-          <TableCell className="font-medium">{totalQuantity.toLocaleString()}</TableCell>
+          <TableCell className="font-medium text-green-600">
+            +{totalQuantity.toLocaleString()}
+          </TableCell>
           <TableCell>
             <Badge
               variant={
@@ -337,7 +341,9 @@ export function StockOperationsHistory({
               {operation.items.length > 2 && '...'}
             </div>
           </TableCell>
-          <TableCell className="font-medium">{totalQuantity.toLocaleString()}</TableCell>
+          <TableCell className="font-medium text-red-600">
+            -{totalQuantity.toLocaleString()}
+          </TableCell>
           <TableCell>
             <Badge
               variant={
@@ -417,7 +423,9 @@ export function StockOperationsHistory({
               '—'
             )}
           </TableCell>
-          <TableCell className="font-medium">{totalQuantity.toLocaleString()}</TableCell>
+          <TableCell className="font-medium text-red-600">
+            -{totalQuantity.toLocaleString()}
+          </TableCell>
           <TableCell>
             <Badge
               variant={
@@ -478,7 +486,15 @@ export function StockOperationsHistory({
             {operation.items.length > 2 && '...'}
           </div>
         </TableCell>
-        <TableCell className="font-medium">{totalQuantity.toLocaleString()}</TableCell>
+        <TableCell className="font-medium">
+          {operationType === 'stock_in' ? (
+            <span className="text-green-600">+{totalQuantity.toLocaleString()}</span>
+          ) : operationType === 'stock_out' || operationType === 'damage' ? (
+            <span className="text-red-600">-{totalQuantity.toLocaleString()}</span>
+          ) : (
+            totalQuantity.toLocaleString()
+          )}
+        </TableCell>
         <TableCell>
           <Badge
             variant={
