@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
     const db = await getDatabase();
     const productsCollection = db.collection('products');
+    const quotationsCollection = db.collection('quotations');
 
     const query = { isDeleted: { $ne: true } };
 
@@ -37,10 +38,11 @@ export async function GET(request: NextRequest) {
       stockAggregation.map((item) => [item._id.toString(), item.totalStock])
     );
 
-    const [totalProducts, activeProducts, allProducts] = await Promise.all([
+    const [totalProducts, activeProducts, allProducts, totalQuotations] = await Promise.all([
       productsCollection.countDocuments(query),
       productsCollection.countDocuments({ ...query, isActive: true, isDiscontinued: { $ne: true } }),
       productsCollection.find(query).toArray(),
+      quotationsCollection.countDocuments({ isDeleted: { $ne: true } }),
     ]);
 
     // Calculate low stock products and total value using warehouse stock
@@ -60,7 +62,7 @@ export async function GET(request: NextRequest) {
         lowStockProducts++;
       }
 
-      totalValue += totalStock * (product.sellingPrice || 0);
+      totalValue += totalStock * (product.mrp || 0);
     }
 
     return NextResponse.json({
@@ -68,6 +70,7 @@ export async function GET(request: NextRequest) {
       activeProducts,
       lowStockCount: lowStockProducts,
       totalValue,
+      totalQuotations,
     });
   } catch (error) {
     console.error('Get stats error:', error);

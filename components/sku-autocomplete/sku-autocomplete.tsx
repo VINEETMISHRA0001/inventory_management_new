@@ -1,17 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { Input } from '@/components/ui/input';
-import { apiClient } from '@/lib/api-client';
-import { API_ENDPOINTS } from '@/lib/constants';
-import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useState, useEffect, useRef } from "react";
+import { Input } from "@/components/ui/input";
+import { apiClient } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/lib/constants";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Product {
   id: string;
   sku: string;
   name: string;
   quantity: number;
+  mrp?: number;
+  price?: number;
+  productType?: string;
 }
 
 interface SkuAutocompleteProps {
@@ -26,7 +29,7 @@ interface SkuAutocompleteProps {
 export function SkuAutocomplete({
   value,
   onChange,
-  placeholder = 'e.g., S2020181FG',
+  placeholder = "e.g., S2020181FG",
   required = false,
   disabled = false,
   className,
@@ -64,9 +67,19 @@ export function SkuAutocomplete({
           },
         });
 
-        const filteredProducts = response.data.products.filter((product) =>
-          product.sku.toLowerCase().includes(value.toLowerCase())
-        );
+        const filteredProducts = response.data.products
+          .filter((product) =>
+            product.sku.toLowerCase().includes(value.toLowerCase())
+          )
+          .map((product: any) => ({
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            quantity: product.quantity || 0,
+            mrp: product.mrp || 0,
+            price: product.price || product.sellingPrice || 0,
+            productType: product.productType || "",
+          }));
 
         setSuggestions(filteredProducts);
         // Open dropdown if there are suggestions and input is focused
@@ -76,7 +89,7 @@ export function SkuAutocomplete({
           setIsOpen(false);
         }
       } catch (error) {
-        console.error('Error fetching products:', error);
+        console.error("Error fetching products:", error);
         setSuggestions([]);
         setIsOpen(false);
       } finally {
@@ -101,18 +114,18 @@ export function SkuAutocomplete({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen || suggestions.length === 0) return;
 
-    if (e.key === 'ArrowDown') {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIndex((prev) =>
         prev < suggestions.length - 1 ? prev + 1 : prev
       );
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
-    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+    } else if (e.key === "Enter" && selectedIndex >= 0) {
       e.preventDefault();
       handleSelect(suggestions[selectedIndex]);
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       setIsOpen(false);
     }
   };
@@ -158,8 +171,8 @@ export function SkuAutocomplete({
                   <li
                     key={product.id}
                     className={cn(
-                      'cursor-pointer px-4 py-2 text-sm hover:bg-accent',
-                      selectedIndex === index && 'bg-accent'
+                      "cursor-pointer px-4 py-2 text-sm hover:bg-accent",
+                      selectedIndex === index && "bg-accent"
                     )}
                     onClick={() => handleSelect(product)}
                     onMouseEnter={() => setSelectedIndex(index)}
@@ -182,4 +195,3 @@ export function SkuAutocomplete({
     </div>
   );
 }
-

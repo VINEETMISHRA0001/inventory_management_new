@@ -152,23 +152,27 @@ export async function POST(request: NextRequest) {
       }
 
       const unitPrice = item.unitPrice || product.price || 0;
-      const itemTotal = unitPrice * item.quantity;
+      const discountPercent = item.discount || 0;
+      const itemSubtotal = unitPrice * item.quantity;
+      const discountAmount = itemSubtotal * (discountPercent / 100);
+      const itemTotal = Math.max(0, itemSubtotal - discountAmount);
       subtotal += itemTotal;
 
       validatedItems.push({
         sku: item.sku,
         productName: product.name || '',
+        productType: product.productType || '',
         quantity: item.quantity,
         unitPrice: unitPrice,
+        discount: discountPercent,
         total: itemTotal,
       });
     }
 
     // Calculate totals
     const taxRate = body.taxRate || 0;
-    const discount = body.discount || 0;
-    const tax = (subtotal - discount) * (taxRate / 100);
-    const total = subtotal - discount + tax;
+    const tax = subtotal * (taxRate / 100);
+    const total = subtotal + tax;
 
     // Generate quotation number (count only non-deleted quotations)
     const count = await quotationsCollection.countDocuments({
@@ -181,6 +185,13 @@ export async function POST(request: NextRequest) {
     const validUntil = new Date();
     validUntil.setDate(validUntil.getDate() + validDays);
 
+    // Calculate total discount amount from all items (sum of discount amounts, not percentages)
+    const totalDiscount = validatedItems.reduce((sum, item) => {
+      const itemSubtotal = item.unitPrice * item.quantity;
+      const itemDiscountAmount = itemSubtotal * ((item.discount || 0) / 100);
+      return sum + itemDiscountAmount;
+    }, 0);
+
     const quotationData = {
       quotationNumber,
       customerName: body.customerName,
@@ -191,7 +202,7 @@ export async function POST(request: NextRequest) {
       subtotal,
       taxRate,
       tax,
-      discount,
+      discount: totalDiscount, // Total discount across all items (for backward compatibility)
       total,
       validUntil,
       notes: body.notes || '',

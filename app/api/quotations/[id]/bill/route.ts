@@ -73,8 +73,10 @@ export async function GET(
       items: (quotation.items || []).map((item: any) => ({
         sku: item.sku || '',
         productName: item.productName || '',
+        productType: item.productType || '',
         quantity: item.quantity || 0,
         unitPrice: item.unitPrice || 0,
+        discount: item.discount || 0,
         total: item.total || 0,
       })),
       subtotal: quotation.subtotal || 0,

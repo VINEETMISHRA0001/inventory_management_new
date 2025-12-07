@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { ArrowLeft, Search, CalendarIcon, Package, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Search, CalendarIcon, Package, ImageIcon, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,8 @@ interface MovementData {
   stockIn: number;
   stockOut: number;
   netStock: number;
+  operationId?: string;
+  timestamp?: string;
 }
 
 interface MovementLog {
@@ -32,9 +34,17 @@ interface MovementLog {
   movements: MovementData[];
 }
 
+interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  productType?: string;
+}
+
 export default function StockMovementLogsPage() {
   const router = useRouter();
   const [skuSearch, setSkuSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [movementLog, setMovementLog] = useState<MovementLog | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [dateMode, setDateMode] = useState<'single' | 'range'>('single');
@@ -44,15 +54,114 @@ export default function StockMovementLogsPage() {
     to: undefined,
   });
 
-  const fetchMovementLog = async () => {
-    if (!skuSearch.trim()) {
+  // Search dropdown state
+  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [hasMoreProducts, setHasMoreProducts] = useState(true);
+  const [productsPage, setProductsPage] = useState(1);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const lastProductElementRef = useCallback(
+    (node: HTMLLIElement | null) => {
+      if (isLoadingSuggestions) return;
+      if (observerRef.current) observerRef.current.disconnect();
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMoreProducts) {
+          setProductsPage((prev) => prev + 1);
+        }
+      });
+      if (node) observerRef.current.observe(node);
+    },
+    [isLoadingSuggestions, hasMoreProducts]
+  );
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  // Fetch products with search and pagination
+  const fetchProducts = useCallback(
+    async (search: string, page: number, append: boolean = false) => {
+      if (!search || search.length < 2) {
+        if (!append) {
+          setSuggestions([]);
+          setIsDropdownOpen(false);
+        }
+        return;
+      }
+
+      setIsLoadingSuggestions(true);
+      try {
+        const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE, {
+          params: {
+            search,
+            page,
+            limit: 20,
+          },
+        });
+        const newProducts: Product[] = (response.data.products || []).map((p: any) => ({
+          id: p.id || p._id,
+          sku: p.sku,
+          name: p.name,
+          productType: p.productType,
+        }));
+        
+        if (append) {
+          setSuggestions((prev) => [...prev, ...newProducts]);
+        } else {
+          setSuggestions(newProducts);
+        }
+        setHasMoreProducts(newProducts.length === 20);
+        if (newProducts.length > 0 && !append) {
+          setIsDropdownOpen(true);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+        if (!append) {
+          setSuggestions([]);
+        }
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    },
+    []
+  );
+
+  // Debounced search effect
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(() => {
+      setProductsPage(1);
+      setSuggestions([]);
+      fetchProducts(skuSearch, 1, false);
+    }, 300);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [skuSearch, fetchProducts]);
+
+  // Load more products when page changes
+  useEffect(() => {
+    if (productsPage > 1 && skuSearch.length >= 2) {
+      fetchProducts(skuSearch, productsPage, true);
+    }
+  }, [productsPage, skuSearch, fetchProducts]);
+
+  const fetchMovementLog = async (sku: string) => {
+    if (!sku.trim()) {
       setMovementLog(null);
       return;
     }
 
     setIsLoading(true);
     try {
-      const params: any = { sku: skuSearch.trim() };
+      const params: any = { sku: sku.trim() };
       
       if (dateMode === 'single' && singleDate) {
         params.date = format(singleDate, 'yyyy-MM-dd');
@@ -73,13 +182,102 @@ export default function StockMovementLogsPage() {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchMovementLog();
+  // Auto-fetch movement log when product is selected or date changes
+  useEffect(() => {
+    if (selectedProduct) {
+      fetchMovementLog(selectedProduct.sku);
+    }
+  }, [selectedProduct, dateMode, singleDate, dateRange]);
+
+  const handleProductSelect = (product: Product) => {
+    setSelectedProduct(product);
+    setSkuSearch(product.sku);
+    setIsDropdownOpen(false);
+    setSuggestions([]);
+    setSelectedIndex(-1);
+    inputRef.current?.blur();
   };
 
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'dd/MM/yy');
+  const handleSearchChange = (value: string) => {
+    setSkuSearch(value);
+    setSelectedProduct(null);
+    setSelectedIndex(-1);
+    if (value.length >= 2) {
+      setIsDropdownOpen(true);
+    } else {
+      setIsDropdownOpen(false);
+      setSuggestions([]);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDropdownOpen || suggestions.length === 0) {
+      if (e.key === 'Enter' && skuSearch.trim()) {
+        e.preventDefault();
+        fetchMovementLog(skuSearch.trim());
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) =>
+        prev < suggestions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      handleProductSelect(suggestions[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      setIsDropdownOpen(false);
+    }
+  };
+
+  const handleBlur = () => {
+    setTimeout(() => {
+      setIsDropdownOpen(false);
+    }, 200);
+  };
+
+  const formatDateIST = (timestamp?: string, dateString?: string) => {
+    try {
+      const date = timestamp ? new Date(timestamp) : dateString ? new Date(dateString) : null;
+      if (!date) return '—';
+      
+      // Format date in IST
+      const istDate = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(date);
+      
+      return istDate;
+    } catch {
+      return '—';
+    }
+  };
+
+  const formatTimestampIST = (timestamp?: string, dateString?: string) => {
+    try {
+      const date = timestamp ? new Date(timestamp) : dateString ? new Date(dateString) : null;
+      if (!date) return '—';
+      
+      // Format timestamp in IST with AM/PM
+      const istTime = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      }).format(date);
+      
+      return istTime;
+    } catch {
+      return '—';
+    }
   };
 
   return (
@@ -111,26 +309,72 @@ export default function StockMovementLogsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end">
-              {/* SKU Search */}
-              <form onSubmit={handleSearch} className="flex-1 lg:max-w-xs space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              {/* SKU Search with Dropdown */}
+              <div className="flex-1 lg:max-w-xs space-y-2">
+                <div className="relative" ref={dropdownRef}>
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground z-10" />
                   <Input
-                    placeholder="Enter SKU"
+                    ref={inputRef}
+                    placeholder="Search by SKU or name..."
                     value={skuSearch}
-                    onChange={(e) => setSkuSearch(e.target.value)}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    onFocus={() => {
+                      if (suggestions.length > 0) {
+                        setIsDropdownOpen(true);
+                      }
+                    }}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}
                     className="pl-9"
                   />
+                  {isDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover text-popover-foreground rounded-md border shadow-md">
+                      <div className="max-h-60 overflow-auto">
+                        {isLoadingSuggestions && suggestions.length === 0 ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : suggestions.length > 0 ? (
+                          <ul className="py-1">
+                            {suggestions.map((product, index) => (
+                              <li
+                                key={product.id}
+                                ref={index === suggestions.length - 1 ? lastProductElementRef : null}
+                                className={cn(
+                                  'cursor-pointer px-4 py-2 text-sm hover:bg-accent transition-colors',
+                                  selectedIndex === index && 'bg-accent'
+                                )}
+                                onClick={() => handleProductSelect(product)}
+                                onMouseEnter={() => setSelectedIndex(index)}
+                              >
+                                <div className="font-medium font-mono">{product.sku}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {product.name}
+                                  {product.productType && ` • ${product.productType}`}
+                                </div>
+                              </li>
+                            ))}
+                            {isLoadingSuggestions && suggestions.length > 0 && (
+                              <li className="flex items-center justify-center p-2">
+                                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                              </li>
+                            )}
+                            {!hasMoreProducts && suggestions.length > 0 && (
+                              <li className="px-4 py-2 text-xs text-muted-foreground text-center">
+                                No more products
+                              </li>
+                            )}
+                          </ul>
+                        ) : (
+                          <div className="px-4 py-2 text-sm text-muted-foreground">
+                            {skuSearch.length < 2 ? 'Type at least 2 characters' : 'No products found'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <Button 
-                  type="submit" 
-                  disabled={isLoading || !skuSearch.trim()}
-                  className="w-full"
-                  size="default"
-                >
-                  {isLoading ? 'Searching...' : 'Search'}
-                </Button>
-              </form>
+              </div>
 
               {/* Date Selection */}
               <div className="flex-1 lg:flex-[2]">
@@ -217,14 +461,14 @@ export default function StockMovementLogsPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <TableSkeleton rows={10} columns={5} columnWidths={[80, 120, 120, 120, 120]} />
+                <TableSkeleton rows={10} columns={5} columnWidths={[80, 150, 120, 120, 120]} />
               ) : movementLog.movements.length > 0 ? (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-20">Image</TableHead>
-                        <TableHead>Date</TableHead>
+                        <TableHead>Date & Time</TableHead>
                         <TableHead className="text-right">Stock In</TableHead>
                         <TableHead className="text-right">Stock Out</TableHead>
                         <TableHead className="text-right">Net Stock</TableHead>
@@ -232,14 +476,21 @@ export default function StockMovementLogsPage() {
                     </TableHeader>
                     <TableBody>
                       {movementLog.movements.map((movement, index) => (
-                        <TableRow key={`${movement.date}-${index}`}>
+                        <TableRow key={movement.operationId || `${movement.date}-${movement.timestamp || index}-${index}`}>
                           <TableCell>
                             <div className="flex items-center justify-center w-12 h-12 bg-muted rounded border">
                               <ImageIcon className="size-5 text-muted-foreground" />
                             </div>
                           </TableCell>
-                          <TableCell className="font-medium">
-                            {formatDate(movement.date)}
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {formatDateIST(movement.timestamp, movement.date)}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatTimestampIST(movement.timestamp, movement.date)}
+                              </span>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             {movement.stockIn > 0 ? (
@@ -278,26 +529,26 @@ export default function StockMovementLogsPage() {
           </Card>
         )}
 
-        {!movementLog && !isLoading && skuSearch && (
+        {!movementLog && !isLoading && selectedProduct && (
           <Card className="border-2">
             <CardContent className="flex items-center justify-center py-16">
               <div className="text-center">
                 <div className="p-4 rounded-full bg-destructive/10 dark:bg-destructive/20 inline-block mb-4">
                   <Search className="size-8 text-destructive" />
                 </div>
-                <p className="text-xl font-semibold mb-2">Product not found</p>
-                <p className="text-sm text-muted-foreground">Please check the SKU and try again</p>
+                <p className="text-xl font-semibold mb-2">No movement data found</p>
+                <p className="text-sm text-muted-foreground">Try adjusting your date range or select a different product</p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {!movementLog && !isLoading && !skuSearch && (
+        {!movementLog && !isLoading && !selectedProduct && (
           <Card className="border-2 border-dashed">
             <CardContent className="flex items-center justify-center py-16">
               <div className="text-center text-muted-foreground">
                 <p className="text-lg font-medium mb-2">Search for a product</p>
-                <p className="text-sm">Enter a SKU above to view detailed stock movement logs</p>
+                <p className="text-sm">Search by SKU or product name above to view detailed stock movement logs</p>
               </div>
             </CardContent>
           </Card>

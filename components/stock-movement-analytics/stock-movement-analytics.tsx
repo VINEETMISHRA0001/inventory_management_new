@@ -1,403 +1,547 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { format } from 'date-fns';
-import { CalendarIcon, Search, TrendingUp, TrendingDown } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import { apiClient } from '@/lib/api-client';
-import { API_ENDPOINTS } from '@/lib/constants';
-import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import Skeleton from 'react-loading-skeleton';
+import { useState, useEffect, useCallback } from "react";
+import {
+  format,
+  isToday,
+  isYesterday,
+  differenceInDays,
+  formatDistanceToNow,
+} from "date-fns";
+import {
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  X,
+  Package,
+  Search,
+  FileX,
+  AlertCircle,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { apiClient } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/lib/constants";
+import { Skeleton } from "@/components/ui/skeleton";
 
-interface Product {
-  id: string;
+interface TodayMovement {
   sku: string;
-  name: string;
-  currentStock?: number;
+  productName: string;
+  productType: string;
+  stockIn: number;
+  stockOut: number;
+  nettStock: number;
+  lastUpdated?: string | null;
 }
 
-interface MovementData {
+interface TodayMovementsResponse {
+  date: string;
+  movements: TodayMovement[];
+}
+
+interface MovementLogEntry {
   date: string;
   stockIn: number;
   stockOut: number;
   netStock: number;
+  operationType?: string;
+  operationId?: string;
+  timestamp?: string;
 }
 
-interface MovementLog {
+interface MovementLogResponse {
   sku: string;
   productName: string;
   currentStock: number;
-  movements: MovementData[];
+  movements: MovementLogEntry[];
 }
 
 export function StockMovementAnalytics() {
-  const [dateMode, setDateMode] = useState<'single' | 'range'>('single');
-  const [singleDate, setSingleDate] = useState<Date | undefined>(undefined);
-  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-    from: undefined,
-    to: undefined,
-  });
-  const [productSearch, setProductSearch] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [movementLog, setMovementLog] = useState<MovementLog | null>(null);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [data, setData] = useState<TodayMovementsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedSku, setSelectedSku] = useState<string | null>(null);
+  const [movementLog, setMovementLog] = useState<MovementLogResponse | null>(
+    null
+  );
   const [isLoadingLog, setIsLoadingLog] = useState(false);
-  const [hasMoreProducts, setHasMoreProducts] = useState(true);
-  const [productsPage, setProductsPage] = useState(1);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const lastProductElementRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (isLoadingProducts) return;
-      if (observerRef.current) observerRef.current.disconnect();
-      observerRef.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMoreProducts) {
-          setProductsPage((prev) => prev + 1);
-        }
-      });
-      if (node) observerRef.current.observe(node);
-    },
-    [isLoadingProducts, hasMoreProducts]
-  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
 
-  // Fetch products with search and pagination
-  const fetchProducts = useCallback(
-    async (search: string, page: number, append: boolean = false) => {
-      setIsLoadingProducts(true);
+  const fetchMovements = useCallback(
+    async (showRefreshing = false) => {
+      if (showRefreshing) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setHasError(false);
       try {
-        const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE, {
-          params: {
-            search,
-            page,
-            limit: 20,
-          },
-        });
-        const newProducts: Product[] = (response.data.products || []).map((p: any) => ({
-          id: p.id || p._id,
-          sku: p.sku,
-          name: p.name,
-          currentStock: p.quantity,
-        }));
-        if (append) {
-          setProducts((prev) => [...prev, ...newProducts]);
-        } else {
-          setProducts(newProducts);
-        }
-        setHasMoreProducts(newProducts.length === 20);
-      } catch (error) {
-        console.error('Failed to fetch products:', error);
+        const dateStr = format(selectedDate, "yyyy-MM-dd");
+        const response = await apiClient.get<TodayMovementsResponse>(
+          `${API_ENDPOINTS.STOCK.TODAY_MOVEMENTS}?date=${dateStr}`
+        );
+        setData(response.data);
+      } catch (error: any) {
+        console.error("Failed to fetch movements:", error);
+        setHasError(true);
+        const dateStr = format(selectedDate, "yyyy-MM-dd");
+        setData({ date: dateStr, movements: [] });
       } finally {
-        setIsLoadingProducts(false);
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
     },
-    []
+    [selectedDate]
   );
 
-  // Initial load and debounced search
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setProductsPage(1);
-      setProducts([]);
-      fetchProducts(productSearch, 1, false);
-    }, productSearch ? 300 : 0); // No delay for initial load
+    fetchMovements();
+  }, [fetchMovements]);
 
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productSearch]);
-
-  // Load more products
+  // Auto-refresh every 30 seconds when viewing today
   useEffect(() => {
-    if (productsPage > 1) {
-      fetchProducts(productSearch, productsPage, true);
+    if (!isToday(selectedDate)) return;
+
+    const interval = setInterval(() => {
+      fetchMovements(true);
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedDate, fetchMovements]);
+
+  // Refresh on window focus when viewing today
+  useEffect(() => {
+    if (!isToday(selectedDate)) return;
+
+    const handleFocus = () => {
+      fetchMovements(true);
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [selectedDate, fetchMovements]);
+
+  const handlePreviousDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() - 1);
+    setSelectedDate(newDate);
+  };
+
+  const handleNextDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + 1);
+    newDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Allow going forward if the new date is today or earlier
+    if (newDate.getTime() <= today.getTime()) {
+      setSelectedDate(newDate);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productsPage]);
+  };
 
-  // Fetch movement log
-  const fetchMovementLog = useCallback(async () => {
-    if (!selectedProduct) return;
+  const getDateLabel = (date: Date): { relative: string; actual: string } => {
+    const actualDate = format(date, "dd MMMM yyyy");
 
-    setIsLoadingLog(true);
-    try {
-      const params: any = { sku: selectedProduct.sku };
-      
-      if (dateMode === 'single' && singleDate) {
-        params.date = format(singleDate, 'yyyy-MM-dd');
-      } else if (dateMode === 'range' && dateRange.from && dateRange.to) {
-        params.startDate = format(dateRange.from, 'yyyy-MM-dd');
-        params.endDate = format(dateRange.to, 'yyyy-MM-dd');
+    if (isToday(date)) {
+      return { relative: "Today", actual: actualDate };
+    } else if (isYesterday(date)) {
+      return { relative: "Yesterday", actual: actualDate };
+    } else {
+      const daysDiff = differenceInDays(new Date(), date);
+      if (daysDiff <= 7) {
+        return { relative: `${daysDiff} days ago`, actual: actualDate };
+      } else {
+        return { relative: actualDate, actual: actualDate };
       }
+    }
+  };
 
-      const response = await apiClient.get(API_ENDPOINTS.STOCK.MOVEMENT_LOG, { params });
-      setMovementLog(response.data);
+  const canGoNext = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(selectedDate);
+    selected.setHours(0, 0, 0, 0);
+    // Allow going forward if selected date is before today
+    return selected.getTime() < today.getTime();
+  };
+
+  const canGoPrevious = () => {
+    // Disable previous button if there's an error or if we're at a reasonable limit
+    // You can adjust this logic based on your business requirements
+    // For now, we'll allow going back indefinitely, but you might want to set a limit
+    return !hasError;
+  };
+
+  const handleSkuClick = useCallback(async (sku: string) => {
+    setSelectedSku(sku);
+    setIsModalOpen(true);
+    setIsLoadingLog(true);
+    setLogError(null);
+    setMovementLog(null);
+
+    try {
+      // Fetch all movement logs for this SKU (no date filter)
+      const response = await apiClient.get<MovementLogResponse>(
+        `${API_ENDPOINTS.STOCK.MOVEMENT_LOG}?sku=${sku}`
+      );
+
+      // Sort by timestamp (latest first) - the API already sorts, but ensure it
+      const sortedMovements = [...(response.data.movements || [])].sort(
+        (a, b) => {
+          const timestampA = a.timestamp
+            ? new Date(a.timestamp).getTime()
+            : new Date(a.date).getTime();
+          const timestampB = b.timestamp
+            ? new Date(b.timestamp).getTime()
+            : new Date(b.date).getTime();
+          return timestampB - timestampA; // Descending order (newest first)
+        }
+      );
+
+      setMovementLog({
+        ...response.data,
+        movements: sortedMovements,
+      });
     } catch (error: any) {
-      if (error.message !== 'Product not found') {
-        console.error('Failed to fetch movement log:', error);
+      console.error("Failed to fetch movement log:", error);
+      const errorMessage = error?.message || "Failed to fetch movement log";
+      if (
+        errorMessage.includes("Product not found") ||
+        errorMessage.includes("not found")
+      ) {
+        setLogError("Product not found");
+      } else {
+        setLogError("Failed to load movement logs. Please try again.");
       }
       setMovementLog(null);
     } finally {
       setIsLoadingLog(false);
     }
-  }, [selectedProduct, dateMode, singleDate, dateRange]);
+  }, []);
 
-  // Auto-fetch when product or date changes
-  useEffect(() => {
-    if (selectedProduct) {
-      fetchMovementLog();
-    }
-  }, [selectedProduct, dateMode, singleDate, dateRange, fetchMovementLog]);
-
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'dd/MM/yy');
+  const formatOperationType = (type?: string): string => {
+    if (!type) return "Unknown";
+    return type
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
   };
 
-  const chartData = movementLog?.movements
-    .map((m) => ({
-      date: formatDate(m.date),
-      'Stock In': m.stockIn,
-      'Stock Out': m.stockOut,
-      'Net Stock': m.netStock,
-    }))
-    .reverse() || [];
-
-  const chartConfig = {
-    'Stock In': {
-      label: 'Stock In',
-      color: 'hsl(var(--chart-1))',
-    },
-    'Stock Out': {
-      label: 'Stock Out',
-      color: 'hsl(var(--chart-2))',
-    },
-    'Net Stock': {
-      label: 'Net Stock',
-      color: 'hsl(var(--chart-3))',
-    },
+  const formatDateTime = (timestamp?: string, date?: string): string => {
+    if (timestamp) {
+      const dateObj = new Date(timestamp);
+      return format(dateObj, "dd MMM yyyy, hh:mm a");
+    }
+    if (date) {
+      const dateObj = new Date(date);
+      return format(dateObj, "dd MMM yyyy");
+    }
+    return "N/A";
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {/* Left Column - Date Selector and Products List */}
-      <div className="lg:col-span-1 space-y-4">
-        {/* Date Selector */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Date Selection</CardTitle>
-            <CardDescription>Choose a single date or date range for analysis</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={dateMode} onValueChange={(v) => setDateMode(v as 'single' | 'range')}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="single">Single Date</TabsTrigger>
-                <TabsTrigger value="range">Date Range</TabsTrigger>
-              </TabsList>
-              <TabsContent value="single" className="mt-4">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn('w-full justify-start text-left font-normal py-6', !singleDate && 'text-muted-foreground')}
-                    >
-                      <CalendarIcon className="mr-2 size-4" />
-                      {singleDate ? format(singleDate, 'PPP') : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={singleDate} onSelect={setSingleDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </TabsContent>
-              <TabsContent value="range" className="mt-4 space-y-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn('w-full justify-start text-left font-normal py-6', !dateRange.from && 'text-muted-foreground')}
-                    >
-                      <CalendarIcon className="mr-2 size-4" />
-                      {dateRange.from ? format(dateRange.from, 'PPP') : 'From date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={dateRange.from} onSelect={(date) => setDateRange({ ...dateRange, from: date })} initialFocus />
-                  </PopoverContent>
-                </Popover>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn('w-full justify-start text-left font-normal py-6', !dateRange.to && 'text-muted-foreground')}
-                    >
-                      <CalendarIcon className="mr-2 size-4" />
-                      {dateRange.to ? format(dateRange.to, 'PPP') : 'To date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={dateRange.to} onSelect={(date) => setDateRange({ ...dateRange, to: date })} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        {/* Products List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Products</CardTitle>
-            <CardDescription>Search and select a product to view its stock movement</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by SKU or name..."
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="max-h-[500px] overflow-y-auto space-y-1">
-              {products.map((product, index) => (
-                <div
-                  key={product.id}
-                  ref={index === products.length - 1 ? lastProductElementRef : null}
-                  onClick={() => setSelectedProduct(product)}
-                  className={cn(
-                    'p-3 rounded-lg border cursor-pointer transition-colors hover:bg-accent',
-                    selectedProduct?.id === product.id && 'bg-accent border-primary'
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium font-mono">{product.sku}</div>
-                      <div className="text-sm text-muted-foreground">{product.name}</div>
-                    </div>
-                    {product.currentStock !== undefined && (
-                      <Badge variant="outline">{product.currentStock}</Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {isLoadingProducts && products.length === 0 && (
-                <div className="space-y-2 p-3">
-                  <Skeleton height={60} count={3} />
-                </div>
-              )}
-              {isLoadingProducts && products.length > 0 && (
-                <div className="space-y-2 p-3">
-                  <Skeleton height={60} count={2} />
-                </div>
-              )}
-              {!isLoadingProducts && products.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  {productSearch ? 'No products found' : 'Start typing to search products'}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Right Column - Analytics Chart */}
-      <div className="lg:col-span-2">
-        {selectedProduct ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {selectedProduct.sku} = {movementLog?.currentStock ?? '—'}
-              </CardTitle>
-              <CardDescription>{movementLog?.productName || selectedProduct.name}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingLog ? (
-                <div className="flex items-center justify-center h-[400px]">
-                  <Skeleton height={400} width="100%" />
-                </div>
-              ) : movementLog && movementLog.movements.length > 0 ? (
-                <div>
-                  <ChartContainer config={chartConfig} className="h-[400px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData}>
-                        <defs>
-                          <linearGradient id="fillStockIn" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.8} />
-                            <stop offset="95%" stopColor="hsl(var(--card))" stopOpacity={0.1} />
-                          </linearGradient>
-                          <linearGradient id="fillStockOut" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.8} />
-                            <stop offset="95%" stopColor="hsl(var(--card))" stopOpacity={0.1} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis 
-                          dataKey="date" 
-                          tickLine={false} 
-                          axisLine={false} 
-                          tickMargin={8}
-                          tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                          className="text-muted-foreground"
-                        />
-                        <YAxis 
-                          tickLine={false} 
-                          axisLine={false} 
-                          tickMargin={8}
-                          tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                          className="text-muted-foreground"
-                        />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Area
-                          type="monotone"
-                          dataKey="Stock In"
-                          stroke="hsl(var(--chart-1))"
-                          fill="url(#fillStockIn)"
-                          stackId="1"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="Stock Out"
-                          stroke="hsl(var(--chart-2))"
-                          fill="url(#fillStockOut)"
-                          stackId="1"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="Net Stock"
-                          stroke="hsl(var(--chart-3))"
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No movement data found for the selected date range
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardContent className="flex items-center justify-center h-[400px]">
-              <div className="text-center text-muted-foreground">
-                <p className="text-lg font-medium mb-2">Select a product</p>
-                <p className="text-sm">Choose a product from the list to view stock movement analytics</p>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Stock Movement Log</CardTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePreviousDay}
+              disabled={!canGoPrevious()}
+              className="h-8 w-8"
+              title="Previous day"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <div className="min-w-[200px] text-center">
+              <div className="text-sm font-medium">
+                {getDateLabel(selectedDate).relative}
               </div>
-            </CardContent>
-          </Card>
+              <div className="text-xs text-muted-foreground">
+                {getDateLabel(selectedDate).actual}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleNextDay}
+              disabled={!canGoNext()}
+              className="h-8 w-8"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => fetchMovements(true)}
+              disabled={isRefreshing}
+              className="h-8 w-8 ml-2"
+              title="Refresh"
+            >
+              <RefreshCw
+                className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product SKU</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Stock In</TableHead>
+                  <TableHead className="text-right">Stock Out</TableHead>
+                  <TableHead className="text-right">Nett Stock</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data?.movements && data.movements.length > 0 ? (
+                  data.movements.map((movement) => (
+                    <TableRow
+                      key={movement.sku}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => handleSkuClick(movement.sku)}
+                    >
+                      <TableCell className="font-mono text-sm">
+                        {movement.sku}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {movement.productName || "-"}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {movement.productType || "-"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {movement.stockIn > 0 ? (
+                          <span className="text-green-600 font-medium">
+                            +{movement.stockIn.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {movement.stockOut > 0 ? (
+                          <span className="text-red-600 font-medium">
+                            -{movement.stockOut.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {movement.nettStock !== 0 ? (
+                          <span
+                            className={
+                              movement.nettStock > 0
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }
+                          >
+                            {movement.nettStock > 0 ? "+" : ""}
+                            {movement.nettStock.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-12">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="p-4 rounded-full bg-muted/50 dark:bg-muted/30 inline-block mb-4">
+                          <Package className="size-12 text-muted-foreground/50" />
+                        </div>
+                        <p className="text-lg font-medium text-muted-foreground mb-2">
+                          No stock movements found
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          No stock movements for{" "}
+                          {getDateLabel(selectedDate).relative.toLowerCase()}
+                        </p>
+                        {hasError && (
+                          <p className="text-xs text-destructive mt-2">
+                            There was an error loading data. Please try
+                            refreshing.
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
-    </div>
+      </CardContent>
+
+      {/* Movement Log Modal */}
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          setIsModalOpen(open);
+          if (!open) {
+            // Reset state when modal is closed
+            setSelectedSku(null);
+            setMovementLog(null);
+            setLogError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Movement Log - {selectedSku}</DialogTitle>
+            <DialogDescription>
+              {movementLog?.productName && (
+                <span className="block mt-1">{movementLog.productName}</span>
+              )}
+              {movementLog?.currentStock !== undefined && (
+                <span className="block mt-1 text-sm">
+                  Current Stock:{" "}
+                  <strong>{movementLog.currentStock.toLocaleString()}</strong>
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingLog ? (
+            <div className="space-y-2 py-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : logError ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="p-4 rounded-full bg-destructive/10 dark:bg-destructive/20 inline-block mb-4">
+                {logError.includes("not found") ? (
+                  <Search className="size-12 text-destructive" />
+                ) : (
+                  <AlertCircle className="size-12 text-destructive" />
+                )}
+              </div>
+              <p className="text-xl font-semibold mb-2 text-destructive">
+                {logError === "Product not found"
+                  ? "Product Not Found"
+                  : "Error Loading Data"}
+              </p>
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                {logError === "Product not found"
+                  ? `The product with SKU "${selectedSku}" could not be found. Please verify the SKU and try again.`
+                  : logError}
+              </p>
+            </div>
+          ) : movementLog?.movements && movementLog.movements.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border mt-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead className="text-right">Stock In</TableHead>
+                    <TableHead className="text-right">Stock Out</TableHead>
+                    <TableHead className="text-right">Net Stock</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {movementLog.movements.map((entry, index) => (
+                    <TableRow
+                      key={`${entry.operationId || index}-${
+                        entry.timestamp || entry.date
+                      }`}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col">
+                          <span>
+                            {formatDateTime(entry.timestamp, entry.date)}
+                          </span>
+                          {entry.timestamp && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(entry.timestamp), {
+                                addSuffix: true,
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {entry.stockIn > 0 ? (
+                          <span className="text-green-600 font-medium">
+                            +{entry.stockIn.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {entry.stockOut > 0 ? (
+                          <span className="text-red-600 font-medium">
+                            -{entry.stockOut.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {entry.netStock.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="p-4 rounded-full bg-muted/50 dark:bg-muted/30 inline-block mb-4">
+                <FileX className="size-12 text-muted-foreground/50" />
+              </div>
+              <p className="text-lg font-medium text-muted-foreground mb-2">
+                No movement logs found
+              </p>
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                {movementLog?.productName
+                  ? `No movement history available for ${movementLog.productName} (${selectedSku}).`
+                  : `No movement history available for SKU ${selectedSku}.`}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
-

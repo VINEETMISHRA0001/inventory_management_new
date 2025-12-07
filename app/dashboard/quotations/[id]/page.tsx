@@ -1,31 +1,43 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppSidebar } from '@/components/app-sidebar';
-import { SiteHeader } from '@/components/site-header';
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useDispatch, useSelector } from "react-redux";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import {
-  SidebarInset,
-  SidebarProvider,
-} from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { SIDEBAR_CONFIG, APP_PATHS, API_ENDPOINTS } from '@/lib/constants';
-import { apiClient } from '@/lib/api-client';
-import { toast } from 'sonner';
-import { fetchUser } from '@/store/slices/authSlice';
-import { ArrowLeft, Download, Printer, FileText, CheckCircle2, XCircle } from 'lucide-react';
-import type { AppDispatch, RootState } from '@/store/store';
-import { QuotationRejectDialog } from '@/components/quotation-reject-dialog';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { SIDEBAR_CONFIG, APP_PATHS, API_ENDPOINTS } from "@/lib/constants";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "sonner";
+import { fetchUser } from "@/store/slices/authSlice";
+import {
+  ArrowLeft,
+  Download,
+  Printer,
+  FileText,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
+import type { AppDispatch, RootState } from "@/store/store";
+import { QuotationRejectDialog } from "@/components/quotation-reject-dialog";
 
 interface QuotationItem {
   sku: string;
   productName: string;
+  productType?: string;
   quantity: number;
   unitPrice: number;
+  discount?: number;
   total: number;
 }
 
@@ -60,7 +72,9 @@ export default function QuotationViewPage() {
   const router = useRouter();
   const params = useParams();
   const dispatch = useDispatch<AppDispatch>();
-  const { isAuthenticated, isLoading } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, isLoading } = useSelector(
+    (state: RootState) => state.auth
+  );
   const [isMounted, setIsMounted] = useState(false);
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [isLoadingQuotation, setIsLoadingQuotation] = useState(false);
@@ -101,8 +115,8 @@ export default function QuotationViewPage() {
       );
       setQuotation(response.data);
     } catch (error: any) {
-      console.error('Failed to fetch quotation:', error);
-      toast.error(error.response?.data?.error || 'Failed to load quotation');
+      console.error("Failed to fetch quotation:", error);
+      toast.error(error.response?.data?.error || "Failed to load quotation");
       router.push(APP_PATHS.QUOTATIONS);
     } finally {
       setIsLoadingQuotation(false);
@@ -111,14 +125,16 @@ export default function QuotationViewPage() {
 
   const handleApprove = async () => {
     if (!quotation) return;
-    
+
     setIsUpdatingStatus(true);
     try {
       await apiClient.post(API_ENDPOINTS.QUOTATIONS.APPROVE(quotation.id));
-      toast.success(`Quotation ${quotation.quotationNumber} approved successfully`);
+      toast.success(
+        `Quotation ${quotation.quotationNumber} approved successfully`
+      );
       fetchQuotation(); // Refresh quotation data
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to approve quotation');
+      toast.error(error.response?.data?.error || "Failed to approve quotation");
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -130,16 +146,18 @@ export default function QuotationViewPage() {
 
   const handleRejectConfirm = async (reason: string) => {
     if (!quotation) return;
-    
+
     setIsUpdatingStatus(true);
     try {
       await apiClient.post(API_ENDPOINTS.QUOTATIONS.REJECT(quotation.id), {
-        reason: reason || '',
+        reason: reason || "",
       });
-      toast.success(`Quotation ${quotation.quotationNumber} rejected successfully`);
+      toast.success(
+        `Quotation ${quotation.quotationNumber} rejected successfully`
+      );
       fetchQuotation(); // Refresh quotation data
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to reject quotation');
+      toast.error(error.response?.data?.error || "Failed to reject quotation");
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -155,7 +173,7 @@ export default function QuotationViewPage() {
         API_ENDPOINTS.QUOTATIONS.GENERATE_BILL(params.id as string)
       );
       const billData = response.data.bill;
-      
+
       // Create printable bill HTML
       const billHTML = `
         <!DOCTYPE html>
@@ -198,64 +216,118 @@ export default function QuotationViewPage() {
             <div class="customer-info">
               <strong>Bill To:</strong><br>
               ${billData.customer.name}<br>
-              ${billData.customer.email ? billData.customer.email + '<br>' : ''}
-              ${billData.customer.phone ? billData.customer.phone + '<br>' : ''}
-              ${billData.customer.address ? billData.customer.address : ''}
+              ${billData.customer.email ? billData.customer.email + "<br>" : ""}
+              ${billData.customer.phone ? billData.customer.phone + "<br>" : ""}
+              ${billData.customer.address ? billData.customer.address : ""}
             </div>
             <table>
               <thead>
                 <tr>
-                  <th>SKU</th>
-                  <th>Product</th>
+                  <th>Product Details</th>
                   <th class="text-right">Qty</th>
                   <th class="text-right">Unit Price</th>
+                  <th class="text-right">Discount (%)</th>
                   <th class="text-right">Total</th>
                 </tr>
               </thead>
               <tbody>
-                ${billData.items.map((item: any) => `
+                ${billData.items
+                  .map(
+                    (item: any) => `
                   <tr>
-                    <td>${item.sku || ''}</td>
-                    <td>${item.productName || ''}</td>
+                    <td>
+                      <div style="display: flex; flex-direction: column;">
+                        <strong>${item.sku || ""}</strong>
+                        <span>${item.productName || ""}</span>
+                        ${
+                          item.productType
+                            ? `<span style="font-size: 11px; color: #666;">${item.productType}</span>`
+                            : ""
+                        }
+                      </div>
+                    </td>
                     <td class="text-right">${item.quantity || 0}</td>
-                    <td class="text-right">₹${(item.unitPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td class="text-right">₹${(item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="text-right">₹${(
+                      item.unitPrice || 0
+                    ).toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}</td>
+                    <td class="text-right">${
+                      item.discount ? item.discount + "%" : "0%"
+                    }</td>
+                    <td class="text-right">₹${(item.total || 0).toLocaleString(
+                      "en-IN",
+                      { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                    )}</td>
                   </tr>
-                `).join('')}
+                `
+                  )
+                  .join("")}
               </tbody>
             </table>
             <div class="total-section">
               <div class="total-row">
                 <span>Subtotal:</span>
-                <span>₹${(billData.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span>₹${(billData.subtotal || 0).toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}</span>
               </div>
-              ${(billData.discount || 0) > 0 ? `
+              ${
+                (billData.discount || 0) > 0
+                  ? `
                 <div class="total-row">
                   <span>Discount:</span>
-                  <span>-₹${(billData.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>-₹${(billData.discount || 0).toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}</span>
                 </div>
-              ` : ''}
-              ${(billData.tax || 0) > 0 ? `
+              `
+                  : ""
+              }
+              <div class="total-row">
+                <span>Tax %:</span>
+                <span>${billData.taxRate || 0}%</span>
+              </div>
+              ${
+                (billData.tax || 0) > 0
+                  ? `
                 <div class="total-row">
-                  <span>Tax (${billData.taxRate || 0}%):</span>
-                  <span>₹${(billData.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>Tax Amount:</span>
+                  <span>₹${(billData.tax || 0).toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}</span>
                 </div>
-              ` : ''}
+              `
+                  : ""
+              }
               <div class="total-row grand-total">
                 <span>Grand Total:</span>
-                <span>₹${(billData.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span>₹${(billData.total || 0).toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}</span>
               </div>
             </div>
-            ${billData.notes ? `<div style="margin-top: 20px;"><strong>Notes:</strong> ${billData.notes}</div>` : ''}
+            ${
+              billData.notes
+                ? `<div style="margin-top: 20px;"><strong>Notes:</strong> ${billData.notes}</div>`
+                : ""
+            }
             <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #666;">
-              Generated by ${billData.createdBy?.name || 'System'} on ${new Date().toLocaleString()}
+              Generated by ${
+                billData.createdBy?.name || "System"
+              } on ${new Date().toLocaleString()}
             </div>
           </body>
         </html>
       `;
 
       // Open print window
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open("", "_blank");
       if (printWindow) {
         printWindow.document.write(billHTML);
         printWindow.document.close();
@@ -263,10 +335,10 @@ export default function QuotationViewPage() {
         setTimeout(() => {
           printWindow.print();
         }, 250);
-        toast.success('Bill generated successfully');
+        toast.success("Bill generated successfully");
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to generate bill');
+      toast.error(error.response?.data?.error || "Failed to generate bill");
     }
   };
 
@@ -283,8 +355,8 @@ export default function QuotationViewPage() {
       <SidebarProvider
         style={
           {
-            '--sidebar-width': SIDEBAR_CONFIG.WIDTH,
-            '--header-height': SIDEBAR_CONFIG.HEADER_HEIGHT,
+            "--sidebar-width": SIDEBAR_CONFIG.WIDTH,
+            "--header-height": SIDEBAR_CONFIG.HEADER_HEIGHT,
           } as React.CSSProperties
         }
       >
@@ -304,26 +376,29 @@ export default function QuotationViewPage() {
   }
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return '—';
+    if (!dateString) return "—";
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-      draft: 'outline',
-      sent: 'secondary',
-      accepted: 'default',
-      approved: 'default',
-      rejected: 'destructive',
-      expired: 'destructive',
+    const variants: Record<
+      string,
+      "default" | "secondary" | "destructive" | "outline"
+    > = {
+      draft: "outline",
+      sent: "secondary",
+      accepted: "default",
+      approved: "default",
+      rejected: "destructive",
+      expired: "destructive",
     };
     return (
-      <Badge variant={variants[status] || 'outline'}>
+      <Badge variant={variants[status] || "outline"}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </Badge>
     );
@@ -333,8 +408,8 @@ export default function QuotationViewPage() {
     <SidebarProvider
       style={
         {
-          '--sidebar-width': SIDEBAR_CONFIG.WIDTH,
-          '--header-height': SIDEBAR_CONFIG.HEADER_HEIGHT,
+          "--sidebar-width": SIDEBAR_CONFIG.WIDTH,
+          "--header-height": SIDEBAR_CONFIG.HEADER_HEIGHT,
         } as React.CSSProperties
       }
     >
@@ -355,33 +430,36 @@ export default function QuotationViewPage() {
                     <ArrowLeft className="size-4" />
                   </Button>
                   <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Quotation Details</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                      Quotation Details
+                    </h1>
                     <p className="text-muted-foreground mt-1">
                       {quotation.quotationNumber}
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {quotation.status !== 'approved' && quotation.status !== 'rejected' && (
-                    <>
-                      <Button
-                        variant="default"
-                        onClick={handleApprove}
-                        disabled={isUpdatingStatus}
-                      >
-                        <CheckCircle2 className="size-4 mr-2" />
-                        Approve
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={handleRejectClick}
-                        disabled={isUpdatingStatus}
-                      >
-                        <XCircle className="size-4 mr-2" />
-                        Reject
-                      </Button>
-                    </>
-                  )}
+                  {quotation.status !== "approved" &&
+                    quotation.status !== "rejected" && (
+                      <>
+                        <Button
+                          variant="default"
+                          onClick={handleApprove}
+                          disabled={isUpdatingStatus}
+                        >
+                          <CheckCircle2 className="size-4 mr-2" />
+                          Approve
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleRejectClick}
+                          disabled={isUpdatingStatus}
+                        >
+                          <XCircle className="size-4 mr-2" />
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   <Button variant="outline" onClick={handleGenerateBill}>
                     <Download className="size-4 mr-2" />
                     Generate Mini Bill
@@ -400,7 +478,9 @@ export default function QuotationViewPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle>Quotation Information</CardTitle>
-                          <CardDescription>Complete quotation details</CardDescription>
+                          <CardDescription>
+                            Complete quotation details
+                          </CardDescription>
                         </div>
                         {getStatusBadge(quotation.status)}
                       </div>
@@ -408,42 +488,68 @@ export default function QuotationViewPage() {
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Quotation Number</Label>
-                          <p className="text-sm font-medium">{quotation.quotationNumber}</p>
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Quotation Number
+                          </Label>
+                          <p className="text-sm font-medium">
+                            {quotation.quotationNumber}
+                          </p>
                         </div>
                         <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Date</Label>
-                          <p className="text-sm">{formatDate(quotation.createdAt)}</p>
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Date
+                          </Label>
+                          <p className="text-sm">
+                            {formatDate(quotation.createdAt)}
+                          </p>
                         </div>
                         <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Valid Until</Label>
-                          <p className="text-sm">{formatDate(quotation.validUntil)}</p>
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Valid Until
+                          </Label>
+                          <p className="text-sm">
+                            {formatDate(quotation.validUntil)}
+                          </p>
                         </div>
                         <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Status
+                          </Label>
                           <div>{getStatusBadge(quotation.status)}</div>
                         </div>
                       </div>
 
                       <div>
-                        <Label className="text-sm font-medium text-muted-foreground">Customer Information</Label>
+                        <Label className="text-sm font-medium text-muted-foreground">
+                          Customer Information
+                        </Label>
                         <div className="mt-2 space-y-1">
-                          <p className="text-sm font-medium">{quotation.customerName}</p>
+                          <p className="text-sm font-medium">
+                            {quotation.customerName}
+                          </p>
                           {quotation.customerEmail && (
-                            <p className="text-sm text-muted-foreground">{quotation.customerEmail}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {quotation.customerEmail}
+                            </p>
                           )}
                           {quotation.customerPhone && (
-                            <p className="text-sm text-muted-foreground">{quotation.customerPhone}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {quotation.customerPhone}
+                            </p>
                           )}
                           {quotation.customerAddress && (
-                            <p className="text-sm text-muted-foreground">{quotation.customerAddress}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {quotation.customerAddress}
+                            </p>
                           )}
                         </div>
                       </div>
 
                       {quotation.notes && (
                         <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Notes</Label>
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Notes
+                          </Label>
                           <p className="text-sm mt-1">{quotation.notes}</p>
                         </div>
                       )}
@@ -453,31 +559,72 @@ export default function QuotationViewPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Products</CardTitle>
-                      <CardDescription>{quotation.items.length} item(s) in this quotation</CardDescription>
+                      <CardDescription>
+                        {quotation.items.length} item(s) in this quotation
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="border-b">
-                              <th className="text-left py-2 px-3 text-sm font-medium">SKU</th>
-                              <th className="text-left py-2 px-3 text-sm font-medium">Product</th>
-                              <th className="text-right py-2 px-3 text-sm font-medium">Quantity</th>
-                              <th className="text-right py-2 px-3 text-sm font-medium">Unit Price</th>
-                              <th className="text-right py-2 px-3 text-sm font-medium">Total</th>
+                              <th className="text-left py-2 px-3 text-sm font-medium">
+                                Product Details
+                              </th>
+                              <th className="text-right py-2 px-3 text-sm font-medium">
+                                Quantity
+                              </th>
+                              <th className="text-right py-2 px-3 text-sm font-medium">
+                                Unit Price
+                              </th>
+                              <th className="text-right py-2 px-3 text-sm font-medium">
+                                Discount (%)
+                              </th>
+                              <th className="text-right py-2 px-3 text-sm font-medium">
+                                Total
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {quotation.items.map((item, index) => (
                               <tr key={index} className="border-b">
-                                <td className="py-2 px-3 text-sm">{item.sku}</td>
-                                <td className="py-2 px-3 text-sm">{item.productName}</td>
-                                <td className="py-2 px-3 text-sm text-right">{item.quantity}</td>
+                                <td className="py-2 px-3 text-sm">
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">
+                                      {item.sku}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      {item.productName}
+                                    </span>
+                                    {item.productType && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {item.productType}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="py-2 px-3 text-sm text-right">
-                                  ₹{(item.unitPrice || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  {item.quantity}
+                                </td>
+                                <td className="py-2 px-3 text-sm text-right">
+                                  ₹
+                                  {(item.unitPrice || 0).toLocaleString(
+                                    "en-IN",
+                                    {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    }
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-sm text-right">
+                                  {item.discount ? `${item.discount}%` : "0%"}
                                 </td>
                                 <td className="py-2 px-3 text-sm text-right font-medium">
-                                  ₹{(item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  ₹
+                                  {(item.total || 0).toLocaleString("en-IN", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
                                 </td>
                               </tr>
                             ))}
@@ -496,24 +643,58 @@ export default function QuotationViewPage() {
                     <CardContent className="space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-medium">₹{(quotation.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-medium">
+                          ₹
+                          {(quotation.subtotal || 0).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
                       </div>
                       {(quotation.discount || 0) > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Discount</span>
-                          <span className="font-medium text-muted-foreground">-₹{(quotation.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-muted-foreground">
+                            Discount
+                          </span>
+                          <span className="font-medium text-muted-foreground">
+                            -₹
+                            {(quotation.discount || 0).toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
                         </div>
                       )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Tax %</span>
+                        <span className="font-medium">
+                          {quotation.taxRate || 0}%
+                        </span>
+                      </div>
                       {(quotation.tax || 0) > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Tax ({quotation.taxRate || 0}%)</span>
-                          <span className="font-medium">₹{(quotation.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-muted-foreground">
+                            Tax Amount
+                          </span>
+                          <span className="font-medium">
+                            ₹
+                            {(quotation.tax || 0).toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
                         </div>
                       )}
                       <div className="border-t pt-3 mt-3">
                         <div className="flex justify-between">
                           <span className="text-lg font-semibold">Total</span>
-                          <span className="text-lg font-bold">₹{(quotation.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-lg font-bold">
+                            ₹
+                            {(quotation.total || 0).toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
                         </div>
                       </div>
                     </CardContent>
@@ -525,8 +706,12 @@ export default function QuotationViewPage() {
                         <CardTitle>Created By</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-sm font-medium">{quotation.createdBy.name}</p>
-                        <p className="text-sm text-muted-foreground">{quotation.createdBy.email}</p>
+                        <p className="text-sm font-medium">
+                          {quotation.createdBy.name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {quotation.createdBy.email}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
@@ -548,4 +733,3 @@ export default function QuotationViewPage() {
     </SidebarProvider>
   );
 }
-

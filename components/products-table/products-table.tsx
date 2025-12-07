@@ -346,7 +346,6 @@ export function ProductsTable() {
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Quantity</TableHead>
               <TableHead className="text-right">MRP</TableHead>
-              <TableHead className="text-right">Purchase Price</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -355,7 +354,7 @@ export function ProductsTable() {
             {isLoading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 10 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <TableCell key={j}>
                       {j === 0 ? (
                         <Skeleton className="h-16 w-16 rounded" />
@@ -369,7 +368,7 @@ export function ProductsTable() {
             ) : products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={11}
+                  colSpan={10}
                   className="text-center text-muted-foreground"
                 >
                   No products found
@@ -403,9 +402,6 @@ export function ProductsTable() {
                   </TableCell>
                   <TableCell className="text-right">
                     ₹{product.mrp.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    ₹{product.purchasePrice.toLocaleString()}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">

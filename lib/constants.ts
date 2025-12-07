@@ -197,6 +197,7 @@ export const API_ENDPOINTS = {
     WAREHOUSE_DISTRIBUTION: '/api/stock/warehouse-distribution',
     OPERATIONS: '/api/stock/operations',
     MOVEMENT_LOG: '/api/stock/movement-log',
+    TODAY_MOVEMENTS: '/api/stock/today-movements',
   },
   QUOTATIONS: {
     BASE: '/api/quotations',

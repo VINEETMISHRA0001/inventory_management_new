@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppSidebar } from '@/components/app-sidebar';
-import { SiteHeader } from '@/components/site-header';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useDispatch, useSelector } from "react-redux";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -13,21 +13,21 @@ import {
   CardHeader,
   CardTitle,
   CardFooter,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { SIDEBAR_CONFIG, APP_PATHS, API_ENDPOINTS } from '@/lib/constants';
-import { apiClient } from '@/lib/api-client';
-import { fetchUser } from '@/store/slices/authSlice';
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { SIDEBAR_CONFIG, APP_PATHS, API_ENDPOINTS } from "@/lib/constants";
+import { apiClient } from "@/lib/api-client";
+import { fetchUser } from "@/store/slices/authSlice";
 import {
   Package,
   AlertTriangle,
-  CheckCircle2,
+  PackageX,
   FileText,
   ArrowUpRight,
-} from 'lucide-react';
-import Image from 'next/image';
-import { StockMovementAnalytics } from '@/components/stock-movement-analytics';
-import type { AppDispatch, RootState } from '@/store/store';
+} from "lucide-react";
+import Image from "next/image";
+import { StockMovementAnalytics } from "@/components/stock-movement-analytics";
+import type { AppDispatch, RootState } from "@/store/store";
 
 /**
  * Stock Management page provides overview of stock across all warehouses.
@@ -42,7 +42,7 @@ export default function StockManagementPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [stockData, setStockData] = useState({
     available: 0,
-    reserved: 0,
+    lowStock: 0,
     inTransit: 0,
     damaged: 0,
   });
@@ -52,7 +52,7 @@ export default function StockManagementPage() {
       const response = await apiClient.get(API_ENDPOINTS.STOCK.OVERVIEW);
       setStockData(response.data as typeof stockData);
     } catch (error) {
-      console.error('Failed to fetch stock overview:', error);
+      console.error("Failed to fetch stock overview:", error);
     }
   }, []);
 
@@ -90,36 +90,36 @@ export default function StockManagementPage() {
 
   const stockCards = [
     {
-      title: 'Available Stock',
+      title: "Available Stock",
       value: stockData.available.toLocaleString(),
-      description: 'Items ready for sale',
+      description: "Items ready for sale",
       icon: Package,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10 dark:bg-primary/20',
+      color: "text-primary",
+      bgColor: "bg-primary/10 dark:bg-primary/20",
     },
     {
-      title: 'Reserved Stock',
-      value: stockData.reserved.toLocaleString(),
-      description: 'Items reserved for orders',
-      icon: CheckCircle2,
-      color: 'text-foreground',
-      bgColor: 'bg-muted',
+      title: "Low Stock",
+      value: stockData.lowStock.toLocaleString(),
+      description: "Items below threshold",
+      icon: PackageX,
+      color: "text-orange-600",
+      bgColor: "bg-orange-50 dark:bg-orange-950",
     },
     {
-      title: 'Damaged Stock',
+      title: "Damaged Stock",
       value: stockData.damaged.toLocaleString(),
-      description: 'Items requiring attention',
+      description: "Items requiring attention",
       icon: AlertTriangle,
-      color: 'text-destructive',
-      bgColor: 'bg-destructive/10 dark:bg-destructive/20',
+      color: "text-destructive",
+      bgColor: "bg-destructive/10 dark:bg-destructive/20",
     },
     {
-      title: 'Logs and More',
-      value: '—',
-      description: 'View detailed stock movement logs',
+      title: "Complete Stock Log",
+      value: "—",
+      description: "View detailed stock movement logs",
       icon: FileText,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50 dark:bg-blue-950',
+      color: "text-blue-600",
+      bgColor: "bg-blue-50 dark:bg-blue-950",
       isInteractive: true,
     },
   ];
@@ -128,8 +128,8 @@ export default function StockManagementPage() {
     <SidebarProvider
       style={
         {
-          '--sidebar-width': SIDEBAR_CONFIG.WIDTH,
-          '--header-height': SIDEBAR_CONFIG.HEADER_HEIGHT,
+          "--sidebar-width": SIDEBAR_CONFIG.WIDTH,
+          "--header-height": SIDEBAR_CONFIG.HEADER_HEIGHT,
         } as React.CSSProperties
       }
     >

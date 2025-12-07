@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Package, Box, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Box, AlertTriangle, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -20,6 +20,7 @@ interface Stats {
   activeProducts: number;
   lowStockCount: number;
   totalValue: number;
+  totalQuotations: number;
 }
 
 /**
@@ -58,15 +59,6 @@ export function SectionCards() {
       trend: null,
     },
     {
-      title: 'Inventory Value',
-      value: `₹${stats?.totalValue.toLocaleString('en-IN') || '0'}`,
-      description: 'Total stock value',
-      icon: Package,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50 dark:bg-green-950',
-      trend: null,
-    },
-    {
       title: 'Low Stock Items',
       value: stats?.lowStockCount.toString() || '0',
       description: 'Items below threshold',
@@ -76,10 +68,10 @@ export function SectionCards() {
       trend: (stats?.lowStockCount || 0) > 0 ? 'warning' : null,
     },
     {
-      title: 'Active Products',
-      value: stats?.activeProducts.toLocaleString() || '0',
-      description: 'Currently available',
-      icon: TrendingUp,
+      title: 'Quotations',
+      value: stats?.totalQuotations.toLocaleString() || '0',
+      description: 'Total quotations created',
+      icon: FileText,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50 dark:bg-purple-950',
       trend: null,
@@ -87,7 +79,7 @@ export function SectionCards() {
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
       {cards.map((card) => {
         const IconComponent = card.icon;
         return (

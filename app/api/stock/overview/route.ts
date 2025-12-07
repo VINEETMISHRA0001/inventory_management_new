@@ -21,7 +21,21 @@ export async function GET(request: NextRequest) {
     const stockOperationsCollection = db.collection('stock_operations');
     const warehouseStockCollection = db.collection('warehouse_stock');
 
-    const [totalProducts, availableStock, reservedStock, inTransit, damagedStock] = await Promise.all([
+    // Get total stock per product from warehouse_stock
+    const stockAggregation = await warehouseStockCollection.aggregate([
+      {
+        $group: {
+          _id: '$productId',
+          totalStock: { $sum: '$quantity' },
+        },
+      },
+    ]).toArray();
+
+    const stockMap = new Map(
+      stockAggregation.map((item) => [item._id.toString(), item.totalStock])
+    );
+
+    const [totalProducts, availableStock, inTransit, damagedStock, allProducts] = await Promise.all([
       productsCollection.countDocuments({ isDeleted: { $ne: true } }),
       // Get total available stock from warehouse_stock
       warehouseStockCollection.aggregate([
@@ -32,10 +46,6 @@ export async function GET(request: NextRequest) {
           },
         },
       ]).toArray(),
-      // Count reserved stock (items with reservedQuantity > 0)
-      warehouseStockCollection.countDocuments({
-        reservedQuantity: { $gt: 0 },
-      }),
       stockOperationsCollection.countDocuments({
         type: 'stock_transfer',
         status: 'pending',
@@ -44,11 +54,28 @@ export async function GET(request: NextRequest) {
         type: 'damage',
         status: 'pending',
       }),
+      productsCollection.find({ isDeleted: { $ne: true } }).toArray(),
     ]);
+
+    // Calculate low stock products using warehouse stock
+    let lowStockCount = 0;
+    for (const product of allProducts) {
+      const productId = product._id.toString();
+      const totalStock = stockMap.get(productId) ?? product.quantity ?? 0;
+      const lowStockThreshold = product.lowStockThreshold || 0;
+
+      if (
+        product.isActive &&
+        !product.isDiscontinued &&
+        totalStock <= lowStockThreshold
+      ) {
+        lowStockCount++;
+      }
+    }
 
     return NextResponse.json({
       available: availableStock[0]?.total || 0,
-      reserved: reservedStock,
+      lowStock: lowStockCount,
       inTransit: inTransit,
       damaged: damagedStock,
     });

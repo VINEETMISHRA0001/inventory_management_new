@@ -176,6 +176,7 @@ export async function GET(request: NextRequest) {
       stockOut: number;
       operationType: string;
       operationId: string;
+      createdAt: Date;
     }> = [];
 
     operations.forEach((op) => {
@@ -252,6 +253,7 @@ export async function GET(request: NextRequest) {
         stockOut,
         operationType: op.type,
         operationId: op._id?.toString() || '',
+        createdAt: op.createdAt ? new Date(op.createdAt) : new Date(),
       });
     });
 
@@ -409,7 +411,8 @@ export async function GET(request: NextRequest) {
       runningStock += netChange;
 
       const dateKey = entry.operationDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      const timestamp = entry.operationDate.toISOString();
+      // Use createdAt for accurate timestamp showing when operation was actually created
+      const timestamp = entry.createdAt.toISOString();
 
       movements.push({
         date: dateKey,
@@ -423,9 +426,26 @@ export async function GET(request: NextRequest) {
     });
 
     // Sort by timestamp descending (newest first) for display
-    movements.sort((a, b) =>
-      (b.timestamp || b.date).localeCompare(a.timestamp || a.date)
-    );
+    // Use proper date comparison to handle same-day entries correctly
+    movements.sort((a, b) => {
+      // Use createdAt timestamp for accurate sorting
+      const timestampA = a.timestamp ? new Date(a.timestamp).getTime() : new Date(a.date).getTime();
+      const timestampB = b.timestamp ? new Date(b.timestamp).getTime() : new Date(b.date).getTime();
+      return timestampB - timestampA; // Descending order (newest first)
+    });
+
+    // Recalculate net stock backwards from current stock for correct display order
+    // When showing newest first, we need to work backwards from current stock
+    // The net stock should represent the stock AFTER each operation
+    let stockAfterOperation = currentStock;
+    movements.forEach((movement) => {
+      const netChange = movement.stockIn - movement.stockOut;
+      // The net stock for this entry is the stock after this operation
+      movement.netStock = stockAfterOperation;
+      // Work backwards: subtract this operation's change to get stock before it
+      // This becomes the stock after the previous (older) operation
+      stockAfterOperation -= netChange;
+    });
 
     return NextResponse.json({
       sku,
